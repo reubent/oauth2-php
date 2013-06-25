@@ -1,4 +1,5 @@
 <?php
+use OAuth\TimeProvider;
 
 /**
  * OAuth2.0 draft v10 client-side implementation.
@@ -152,7 +153,7 @@ abstract class OAuth2Client {
 		if (!empty($access_token) && isset($access_token['access_token'])) {
 			$session['access_token'] = $access_token['access_token'];
 			$session['base_domain'] = $this->getVariable('base_domain', self::DEFAULT_BASE_DOMAIN);
-			$session['expires'] = isset($access_token['expires_in']) ? time() + $access_token['expires_in'] : time() + $this->getVariable('expires_in', self::DEFAULT_EXPIRES_IN);
+			$session['expires'] = isset($access_token['expires_in']) ? TimeProvider::getTime() + $access_token['expires_in'] : TimeProvider::getTime() + $this->getVariable('expires_in', self::DEFAULT_EXPIRES_IN);
 			$session['refresh_token'] = isset($access_token['refresh_token']) ? $access_token['refresh_token'] : '';
 			$session['scope'] = isset($access_token['scope']) ? $access_token['scope'] : '';
 			$session['secret'] = md5(base64_encode(pack('N6', mt_rand(), mt_rand(), mt_rand(), mt_rand(), mt_rand(), uniqid())));
@@ -535,12 +536,12 @@ abstract class OAuth2Client {
 		
 		$cookie_name = $this->getSessionCookieName();
 		$value = 'deleted';
-		$expires = time() - 3600;
+		$expires = TimeProvider::getTime() - 3600;
 		$base_domain = $this->getVariable('base_domain', self::DEFAULT_BASE_DOMAIN);
 		if ($session) {
 			$value = '"' . http_build_query($session, NULL, '&') . '"';
 			$base_domain = isset($session['base_domain']) ? $session['base_domain'] : $base_domain;
-			$expires = isset($session['expires']) ? $session['expires'] : time() + $this->getVariable('expires_in', self::DEFAULT_EXPIRES_IN);
+			$expires = isset($session['expires']) ? $session['expires'] : TimeProvider::getTime() + $this->getVariable('expires_in', self::DEFAULT_EXPIRES_IN);
 		}
 		
 		// Prepend dot if a domain is found.

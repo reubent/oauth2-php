@@ -1,4 +1,8 @@
 <?php
+
+use OAuth\Helper\ErrorResponse;
+use OAuth\TimeProvider;
+
 require 'OAuth2ServerException.php';
 require 'OAuth2AuthenticateException.php';
 require 'OAuth2RedirectException.php';
@@ -69,7 +73,7 @@ class OAuth2 {
 	 * @var int
 	 * @see OAuth2::setDefaultOptions()
 	 */
-	const DEFAULT_ACCESS_TOKEN_LIFETIME = 3600;
+	const DEFAULT_ACCESS_TOKEN_LIFETIME = 7200;
 	const DEFAULT_REFRESH_TOKEN_LIFETIME = 1209600;
 	const DEFAULT_AUTH_CODE_LIFETIME = 30;
 	const DEFAULT_WWW_REALM = 'Service';
@@ -444,7 +448,7 @@ class OAuth2 {
 		}
 		
 		// Check token expiration (expires is a mandatory paramter)
-		if (isset($token["expires"]) && time() > $token["expires"]) {
+		if (isset($token["expires"]) && TimeProvider::getTime() > $token["expires"]) {
 			throw new OAuth2AuthenticateException(self::HTTP_UNAUTHORIZED, $tokenType, $realm, self::ERROR_INVALID_GRANT, 'The access token provided has expired.', $scope);
 		}
 		
@@ -494,7 +498,7 @@ class OAuth2 {
 				$headers = trim($requestHeaders['Authorization']);
 			}
 		}
-		
+
 		$tokenType = $this->getVariable(self::CONFIG_TOKEN_TYPE);
 		$realm = $this->getVariable(self::CONFIG_WWW_REALM);
 		
@@ -645,7 +649,7 @@ class OAuth2 {
 					throw new OAuth2ServerException(self::HTTP_BAD_REQUEST, self::ERROR_REDIRECT_URI_MISMATCH, "The redirect URI is missing or do not match");
 				}
 				
-				if ($stored["expires"] < time()) {
+				if ($stored["expires"] < TimeProvider::getTime()) {
 					throw new OAuth2ServerException(self::HTTP_BAD_REQUEST, self::ERROR_INVALID_GRANT, "The authorization code has expired");
 				}
 				break;
@@ -664,6 +668,14 @@ class OAuth2 {
 				if ($stored === FALSE) {
 					throw new OAuth2ServerException(self::HTTP_BAD_REQUEST, self::ERROR_INVALID_GRANT);
 				}
+
+				// @todo: if at all possible, fix this file, use strategy for user output and authentication, and fix interface hierarchy
+				/** @noinspection PhpUndefinedMethodInspection */
+				if ($this->storage->isPasswordResetRequired($input['username'])) {
+					echo json_encode(ErrorResponse::nonExistentUser('password reset required'));
+					return;
+				}
+
 				break;
 			
 			case self::GRANT_TYPE_CLIENT_CREDENTIALS:
@@ -693,7 +705,7 @@ class OAuth2 {
 					throw new OAuth2ServerException(self::HTTP_BAD_REQUEST, self::ERROR_INVALID_GRANT, 'Invalid refresh token');
 				}
 				
-				if ($stored["expires"] < time()) {
+				if ($stored["expires"] < TimeProvider::getTime()) {
 					throw new OAuth2ServerException(self::HTTP_BAD_REQUEST, self::ERROR_INVALID_GRANT, 'Refresh token has expired');
 				}
 				
@@ -799,9 +811,10 @@ class OAuth2 {
 	 * 
 	 * @ingroup oauth2_section_3
 	 */
-	public function getAuthorizeParams(array $inputData = NULL) {
+	public function  getAuthorizeParams(array $inputData = NULL) {
 		$filters = array(
-			"client_id" => array("filter" => FILTER_VALIDATE_REGEXP, "options" => array("regexp" => self::CLIENT_ID_REGEXP), "flags" => FILTER_REQUIRE_SCALAR),
+//			"client_id" => array("filter" => FILTER_VALIDATE_REGEXP, "options" => array("regexp" => self::CLIENT_ID_REGEXP), "flags" => FILTER_REQUIRE_SCALAR),
+			"client_id" => array("flags" => FILTER_REQUIRE_SCALAR),
 			"response_type" => array("flags" => FILTER_REQUIRE_SCALAR),
 			"redirect_uri" => array("filter" => FILTER_SANITIZE_URL),
 			"state" => array("flags" => FILTER_REQUIRE_SCALAR),
@@ -1008,12 +1021,12 @@ class OAuth2 {
 			"scope" => $scope
 		);
 		
-		$this->storage->setAccessToken($token["access_token"], $client_id, $user_id, time() + $this->getVariable(self::CONFIG_ACCESS_LIFETIME), $scope);
+		$this->storage->setAccessToken($token["access_token"], $client_id, $user_id, TimeProvider::getTime() + $this->getVariable(self::CONFIG_ACCESS_LIFETIME), $scope);
 		
 		// Issue a refresh token also, if we support them
 		if ($this->storage instanceof IOAuth2RefreshTokens) {
 			$token["refresh_token"] = $this->genAccessToken();
-			$this->storage->setRefreshToken($token["refresh_token"], $client_id, $user_id, time() + $this->getVariable(self::CONFIG_REFRESH_LIFETIME), $scope);
+			$this->storage->setRefreshToken($token["refresh_token"], $client_id, $user_id, TimeProvider::getTime() + $this->getVariable(self::CONFIG_REFRESH_LIFETIME), $scope);
 			
 			// If we've granted a new refresh token, expire the old one
 			if ($this->oldRefreshToken) {
@@ -1043,7 +1056,7 @@ class OAuth2 {
 	 */
 	private function createAuthCode($client_id, $user_id, $redirect_uri, $scope = NULL) {
 		$code = $this->genAuthCode();
-		$this->storage->setAuthCode($code, $client_id, $user_id, $redirect_uri, time() + $this->getVariable(self::CONFIG_AUTH_LIFETIME), $scope);
+		$this->storage->setAuthCode($code, $client_id, $user_id, $redirect_uri, TimeProvider::getTime() + $this->getVariable(self::CONFIG_AUTH_LIFETIME), $scope);
 		return $code;
 	}
 
