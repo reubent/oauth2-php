@@ -333,15 +333,22 @@ class OAuth2 {
 	const ERROR_INSUFFICIENT_SCOPE = 'invalid_scope';
 
 	/**
+	 * @var IOAuth2TokenGeneration
+	 */
+	protected $_tokenStrategy;
+
+	/**
 	 * @}
 	 */
 	
 	/**
 	 * Creates an OAuth2.0 server-side instance.
 	 *
-	 * @param $config - An associative array as below of config options. See CONFIG_* constants.
+	 * @param IOAuth2Storage $storage
+	 * @param array $config - An associative array as below of config options. See CONFIG_* constants.
+	 * @param IOAuth2TokenGeneration $tokenStrategy
 	 */
-	public function __construct(IOAuth2Storage $storage, $config = array()) {
+	public function __construct(IOAuth2Storage $storage, $config = array(), IOAuth2TokenGeneration $tokenStrategy) {
 		$this->storage = $storage;
 		
 		// Configuration options
@@ -349,6 +356,7 @@ class OAuth2 {
 		foreach ( $config as $name => $value ) {
 			$this->setVariable($name, $value);
 		}
+		$this->_tokenStrategy = $tokenStrategy;
 	}
 
 	/**
@@ -1015,7 +1023,7 @@ class OAuth2 {
 	protected function createAccessToken($client_id, $user_id, $scope = NULL) {
 		
 		$token = array(
-			"access_token" => $this->genAccessToken(),
+			"access_token" => $this->_tokenStrategy->getToken($client_id, $user_id, $scope),
 			"expires_in" => $this->getVariable(self::CONFIG_ACCESS_LIFETIME),
 			"token_type" => $this->getVariable(self::CONFIG_TOKEN_TYPE),
 			"scope" => $scope
@@ -1025,7 +1033,7 @@ class OAuth2 {
 		
 		// Issue a refresh token also, if we support them
 		if ($this->storage instanceof IOAuth2RefreshTokens) {
-			$token["refresh_token"] = $this->genAccessToken();
+			$token["refresh_token"] = $this->_tokenStrategy->getRefreshToken($client_id, $user_id);
 			$this->storage->setRefreshToken($token["refresh_token"], $client_id, $user_id, TimeProvider::getTime() + $this->getVariable(self::CONFIG_REFRESH_LIFETIME), $scope);
 			
 			// If we've granted a new refresh token, expire the old one
@@ -1058,44 +1066,6 @@ class OAuth2 {
 		$code = $this->genAuthCode();
 		$this->storage->setAuthCode($code, $client_id, $user_id, $redirect_uri, TimeProvider::getTime() + $this->getVariable(self::CONFIG_AUTH_LIFETIME), $scope);
 		return $code;
-	}
-
-	/**
-	 * Generates an unique access token.
-	 *
-	 * Implementing classes may want to override this function to implement
-	 * other access token generation schemes.
-	 *
-	 * @return
-	 * An unique access token.
-	 *
-	 * @ingroup oauth2_section_4
-	 * @see OAuth2::genAuthCode()
-	 */
-	protected function genAccessToken() {
-		$tokenLen = 40;
-		if (file_exists('/dev/urandom')) { // Get 100 bytes of random data
-			$randomData = file_get_contents('/dev/urandom', false, null, 0, 100) . uniqid(mt_rand(), true);
-		} else {
-			$randomData = mt_rand() . mt_rand() . mt_rand() . mt_rand() . microtime(true) . uniqid(mt_rand(), true);
-		}
-		return substr(hash('sha512', $randomData), 0, $tokenLen);
-	}
-
-	/**
-	 * Generates an unique auth code.
-	 *
-	 * Implementing classes may want to override this function to implement
-	 * other auth code generation schemes.
-	 *
-	 * @return
-	 * An unique auth code.
-	 *
-	 * @ingroup oauth2_section_4
-	 * @see OAuth2::genAccessToken()
-	 */
-	protected function genAuthCode() {
-		return $this->genAccessToken(); // let's reuse the same scheme for token generation
 	}
 
 	/**
