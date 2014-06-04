@@ -680,8 +680,7 @@ class OAuth2 {
 				// @todo: if at all possible, fix this file, use strategy for user output and authentication, and fix interface hierarchy
 				/** @noinspection PhpUndefinedMethodInspection */
 				if ($this->storage->isPasswordResetRequired($input['username'])) {
-					echo json_encode(ErrorResponse::nonExistentUser('password reset required'));
-					return;
+					return ErrorResponse::nonExistentUser('password reset required');
 				}
 
 				break;
@@ -724,12 +723,7 @@ class OAuth2 {
 			case self::GRANT_TYPE_IMPLICIT:
 				/* TODO: NOT YET IMPLEMENTED */
 				throw new OAuth2ServerException('501 Not Implemented', 'This OAuth2 library is not yet complete. This functionality is not implemented yet.');
-				if (!($this->storage instanceof IOAuth2GrantImplicit)) {
-					throw new OAuth2ServerException(self::HTTP_BAD_REQUEST, self::ERROR_UNSUPPORTED_GRANT_TYPE);
-				}
 				
-				break;
-			
 			// Extended grant types:
 			case filter_var($input["grant_type"], FILTER_VALIDATE_URL):
 				if (!($this->storage instanceof IOAuth2GrantExtension)) {
@@ -759,9 +753,7 @@ class OAuth2 {
 		$user_id = isset($stored['user_id']) ? $stored['user_id'] : null;
 		$token = $this->createAccessToken($client[0], $user_id, $stored['scope']);
 		
-		// Send response
-		$this->sendJsonHeaders();
-		echo json_encode($token);
+		return $token;
 	}
 
 	/**
